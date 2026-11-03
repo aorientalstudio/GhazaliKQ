@@ -14,6 +14,39 @@
     });
   }
 
+  /* ---------- install prompt (any visitor, any browser that allows installing) ---------- */
+  (function () {
+    var el = $('install'); if (!el) return;
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+    if (standalone) return;
+    var last = 0; try { last = +localStorage.getItem('ccx:install') || 0; } catch (e) {}
+    if (Date.now() - last < 7 * 86400000) return;             // dismissed: ask again after a week
+    var ua = navigator.userAgent || '';
+    var ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var safariMac = !ios && /safari/i.test(ua) && !/chrome|chromium|crios|fxios|edg/i.test(ua);
+    var ffAndroid = /android/i.test(ua) && /firefox/i.test(ua);
+    var dp = null, shown = false;
+    function steps(list) {
+      var ol = $('installSteps'); ol.innerHTML = list.map(function (t) { return '<li>' + t + '</li>'; }).join(''); ol.hidden = false;
+      $('installP').textContent = 'ثبّته على جهازك في خطوتين:'; $('installYes').textContent = 'فهمت';
+    }
+    function open() { if (shown) return; shown = true; el.classList.add('show'); }
+    function close(remember) {
+      el.classList.remove('show'); shown = false;
+      if (remember) { try { localStorage.setItem('ccx:install', String(Date.now())); } catch (e) {} }
+    }
+    window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); dp = e; setTimeout(open, 1200); });
+    window.addEventListener('appinstalled', function () { close(true); });
+    if (ios) { steps(['اضغط زر المشاركة <b>⬆</b> في أسفل Safari', 'اختر <b>«إضافة إلى الشاشة الرئيسية»</b>']); setTimeout(open, 1800); }
+    else if (safariMac) { steps(['من قائمة <b>ملف</b> في Safari', 'اختر <b>«إضافة إلى Dock»</b>']); setTimeout(open, 1800); }
+    else if (ffAndroid) { steps(['اضغط قائمة المتصفح <b>⋮</b>', 'اختر <b>«تثبيت»</b>']); setTimeout(open, 1800); }
+    $('installYes').addEventListener('click', function () {
+      if (dp) { dp.prompt(); dp.userChoice.then(function () { dp = null; close(true); }); }
+      else close(true);
+    });
+    $('installNo').addEventListener('click', function () { close(true); });
+  })();
+
   var configured = !!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase && CLOCK);
   function show(id) { ['splash', 'gate', 'board'].forEach(function (s) { $(s).classList.toggle('show', s === id); }); }
   function toast(msg) {
