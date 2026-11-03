@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var $=function(id){return document.getElementById(id);};
-var VERSION='v1.02';
+var VERSION='v1.03';
 var KEY='classclock:prefs1';
 try{localStorage.removeItem('classclock:v4');localStorage.removeItem('classclock:v3');}catch(e){}
 var DAY_KEYS=['sun','mon','tue','wed','thu'];

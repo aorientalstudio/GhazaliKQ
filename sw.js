@@ -1,5 +1,5 @@
 /* Offline shell: app files are cached; Supabase calls are never intercepted. */
-const CACHE = 'class-clock-v1.02';
+const CACHE = 'class-clock-v1.03';
 const ASSETS = ['./', 'index.html', 'config.js', 'guard.js', 'app.js', 'auth.js', 'vendor/supabase.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png', 'icons/astudio.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
