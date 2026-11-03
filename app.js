@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var $=function(id){return document.getElementById(id);};
-var VERSION='v1.0';
+var VERSION='v1.02';
 var KEY='classclock:prefs1';
 try{localStorage.removeItem('classclock:v4');localStorage.removeItem('classclock:v3');}catch(e){}
 var DAY_KEYS=['sun','mon','tue','wed','thu'];
@@ -362,7 +362,7 @@ function tick(){
   ptr.style.opacity=live?1:0;
   digitalEl.textContent=hhmm(t);
   hintEl.hidden=!(S.sound&&(!ac||ac.state!=='running'));
-  try{$('todayDate').textContent=new Date().toLocaleDateString('ar',{day:'numeric',month:'long'});}catch(e){}
+  try{$('todayDate').textContent=(function(n){return n.getDate()+'.'+(n.getMonth()+1)+'.'+n.getFullYear();})(new Date());}catch(e){}
 
   if(!periods.length)return;
   var key=viewDay+'|'+live+'|'+idx;
