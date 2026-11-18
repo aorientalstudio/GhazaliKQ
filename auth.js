@@ -73,7 +73,9 @@
   function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function hideScreens() { show(''); root.classList.remove('pub'); root.classList.add('ready'); }
-  function plain(d) { return JSON.stringify({ start: d && d.start, week: d && d.week }); }
+  function plain(d) { return JSON.stringify({ start: d && d.start, week: d && d.week, teacher: (d && d.teacher) || '', override: (d && d.override) || null }); }
+  function payload(d) { var o = { start: d.start, week: d.week }; if (d.teacher) o.teacher = d.teacher; if (d.override) o.override = d.override; return o; }
+  function setOf(row, d) { return { name: row.name, start: d.start, week: d.week, teacher: d.teacher, override: d.override }; }
   function setSave(msg, warn) {
     var el = $('saveState'); if (!el) return;
     el.hidden = !msg; el.textContent = msg || ''; el.classList.toggle('warn', !!warn);
@@ -120,10 +122,10 @@
     if (!st.cid) return;
     var d = CLOCK.getData(), s = plain(d);
     if (s === st.last) { setSave('تم الحفظ ✓'); return; }
-    lsSet('cc:class:' + st.cid, { id: st.cid, name: d.name, data: { start: d.start, week: d.week }, local: true });
+    lsSet('cc:class:' + st.cid, { id: st.cid, name: d.name, data: payload(d), local: true });
     if (!navigator.onLine) { st.dirty = true; setSave('لا يوجد اتصال — سيُحفظ تلقائيًا عند عودته', true); return; }
     try {
-      var r = await sb.from('classes').update({ data: { start: d.start, week: d.week } }).eq('id', st.cid);
+      var r = await sb.from('classes').update({ data: payload(d) }).eq('id', st.cid);
       if (r.error) throw r.error;
       st.last = s; st.dirty = false; setSave('تم الحفظ ✓');
     } catch (e) {
@@ -146,7 +148,7 @@
     if (!row || !row.data || st.dirty) return;
     if (plain(row.data) === st.last) return;
     st.last = plain(row.data);
-    CLOCK.setData({ name: row.name, start: row.data.start, week: row.data.week });
+    CLOCK.setData(setOf(row, row.data));
     lsSet('cc:class:' + row.id, row);
     toast('تم تحديث البرنامج');
   }
@@ -189,7 +191,7 @@
     try { row = await fetchClass(id); }
     catch (e) { $('splashMsg').textContent = 'تعذّر تحميل البرنامج. تأكّدي من الاتصال.'; setTimeout(function () { st.profile && st.profile.role === 'principal' ? showBoard() : show('gate'); }, 2500); return; }
     var data = row.data && row.data.week ? row.data : { start: 480, week: {} };
-    CLOCK.setData({ name: row.name, start: data.start, week: data.week });
+    CLOCK.setData(setOf(row, data));
     st.cid = id; st.last = plain(data); st.dirty = false;
     setChrome(); setSave('تم الحفظ ✓');
     hideScreens();
@@ -209,7 +211,7 @@
       var d = c.data && c.data.week ? c.data : { start: 480, week: {} };
       var s = statusText(CLOCK.statusOf(d)), th = CLOCK.theme(s.icon);
       h += '<button class="cls-card" type="button" data-id="' + esc(c.id) + '" style="--ct:' + th[0] + ';--cb:' + th[1] + ';--cd:' + th[2] + '">' +
-        '<div class="cls-name">' + esc(c.name) + '</div><div class="cls-ico">' + CLOCK.icon(s.icon) + '</div>' +
+        '<div class="cls-name">' + esc(c.name) + '</div>' + (d.teacher ? '<div class="cls-teacher">' + esc(d.teacher) + '</div>' : '') + '<div class="cls-ico">' + CLOCK.icon(s.icon) + '</div>' +
         '<div class="cls-now">' + esc(s.t) + '</div><div class="cls-sub">' + esc(s.sub) + '</div><div class="cls-open">فتح البرنامج وتعديله ←</div></button>';
     });
     $('boardGrid').innerHTML = h || '<p>لا توجد صفوف.</p>';

@@ -1,13 +1,14 @@
 (function(){
 'use strict';
 var $=function(id){return document.getElementById(id);};
-var VERSION='v1.03';
+var VERSION='v1.04';
 var KEY='classclock:prefs1';
 try{localStorage.removeItem('classclock:v4');localStorage.removeItem('classclock:v3');}catch(e){}
 var DAY_KEYS=['sun','mon','tue','wed','thu'];
 var DAY_NAMES={sun:'الأحد',mon:'الإثنين',tue:'الثلاثاء',wed:'الأربعاء',thu:'الخميس'};
 var WEEKDAY_IDX=['sun','mon','tue','wed','thu','fri','sat'];
 function todayKey(){var d=new Date().getDay();return d<=4?WEEKDAY_IDX[d]:null;}
+function dateStr(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 
 /* ---------- illustrations (inline SVG: identical on any screen, fully offline) ---------- */
 var ICONS={
@@ -61,7 +62,7 @@ function iconFor(name){var f=String(name).split('/')[0].trim();return SUBJ[f]||n
 function lesson(n,d){return{name:n,type:'lesson',icon:iconFor(n)||'general',dur:d};}
 function rest(){return{name:'استراحة',type:'rest',icon:'rest',dur:5};}
 function brk(n,d){return{name:n,type:'break',icon:'break',dur:d};}
-var DEFAULT={className:'',start:480,offset:0,sound:true,cheer:true,speak:false,vol:0.7,sndv:2,digital:true,week:{sun:[],mon:[],tue:[],wed:[],thu:[]}};
+var DEFAULT={className:'',start:480,offset:0,sound:true,cheer:true,speak:false,vol:0.7,sndv:2,digital:true,teacher:'',ov:null,week:{sun:[],mon:[],tue:[],wed:[],thu:[]}};
 function clone(o){return JSON.parse(JSON.stringify(o));}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function pad(n){return String(n).padStart(2,'0');}
@@ -96,10 +97,21 @@ var S=load(),periods=[],endT=0;
 var viewDay=todayKey()||'sun',editDay=viewDay;
 var demo=null,demoPlaying=false,demoTimer=null;
 var stateKey='',warned=-5;
+var evMode=false;
+function ovOn(){return !!(S.ov&&S.ov.date===dateStr()&&todayKey());}
+function vStart(){return viewDay===todayKey()&&ovOn()?S.ov.start:S.start;}
+function vItems(){return viewDay===todayKey()&&ovOn()?S.ov.items:S.week[viewDay];}
+function eStart(){return evMode&&ovOn()?S.ov.start:S.start;}
+function eItems(){return evMode&&ovOn()?S.ov.items:S.week[editDay];}
+function applyTeacher(){
+  var has=!!S.teacher,ev=ovOn();
+  $('teacherName').textContent=S.teacher||'';$('teacherBadge').hidden=!has;
+  $('evBadge').hidden=!ev;$('tbWrap').hidden=!(has||ev);
+}
 
 function build(){
-  var t=S.start;
-  periods=S.week[viewDay].map(function(it){var p={name:it.name,type:it.type,icon:it.icon,dur:it.dur,s:t,e:t+it.dur};t=p.e;return p;});
+  var t=vStart();
+  periods=vItems().map(function(it){var p={name:it.name,type:it.type,icon:it.icon,dur:it.dur,s:t,e:t+it.dur};t=p.e;return p;});
   endT=t;
 }
 function nowMin(){
@@ -109,7 +121,7 @@ function nowMin(){
 }
 function isLive(){return demo!==null||viewDay===todayKey();}
 function idxAt(t){
-  if(t<S.start)return -1;
+  if(t<vStart())return -1;
   for(var i=0;i<periods.length;i++){if(t>=periods[i].s&&t<periods[i].e)return i;}
   return periods.length;
 }
@@ -176,8 +188,8 @@ function fitName(){
 }
 function renderNow(idx,live){
   var n=periods.length,state,th,icon,tag,subject,sub,time='';
-  if(!live){state='preview';icon='school';tag='معاينة الجدول';subject='يوم '+DAY_NAMES[viewDay];sub='هكذا سيكون يومنا';time=hhmm(S.start)+' – '+hhmm(endT);}
-  else if(idx<0){state='before';icon='school';tag='موعدنا القادم';subject='صباح الخير!';sub='هيا نبدأ يومًا رائعًا';time=hhmm(S.start);}
+  if(!live){state='preview';icon='school';tag='معاينة الجدول';subject='يوم '+DAY_NAMES[viewDay];sub='هكذا سيكون يومنا';time=hhmm(vStart())+' – '+hhmm(endT);}
+  else if(idx<0){state='before';icon='school';tag='موعدنا القادم';subject='صباح الخير!';sub='هيا نبدأ يومًا رائعًا';time=hhmm(vStart());}
   else if(idx>=n){state='after';icon='bag';tag='انتهى الدوام';subject='أحسنتم يا أبطال!';sub='نراكم غدًا';}
   else{var p=periods[idx];state='active';icon=p.icon;tag=TAGS[p.type]||TAGS.lesson;subject=p.name;sub=SUB[p.icon]||SUB.general;time=hhmm(p.s)+' – '+hhmm(p.e);}
   th=THEME[icon]||THEME.general;
@@ -188,7 +200,7 @@ function renderNow(idx,live){
   $('heroIcon').innerHTML=ICONS[icon];
   if(state!=='active'){
     $('progress').style.width='0%';
-    $('remaining').textContent=state==='before'?'تبدأ الحصة الأولى الساعة '+hhmm(S.start):(state==='after'?'إلى اللقاء':'');
+    $('remaining').textContent=state==='before'?'تبدأ الحصة الأولى الساعة '+hhmm(vStart()):(state==='after'?'إلى اللقاء':'');
     nowEl.classList.remove('soon');rightEl.classList.remove('soon');
   }
   retrigger(nowEl);
@@ -423,12 +435,12 @@ function el(tag,attrs){
   return e;
 }
 function updateTimes(){
-  var ts=rowsEl.querySelectorAll('.t'),t=S.start;
-  S.week[editDay].forEach(function(it,i){var st=t,en=t+it.dur;t=en;if(ts[i])ts[i].textContent=hhmm(st)+' – '+hhmm(en);});
+  var ts=rowsEl.querySelectorAll('.t'),t=eStart();
+  eItems().forEach(function(it,i){var st=t,en=t+it.dur;t=en;if(ts[i])ts[i].textContent=hhmm(st)+' – '+hhmm(en);});
 }
 function renderEditor(){
   rowsEl.innerHTML='';
-  var items=S.week[editDay];
+  var items=eItems();
   items.forEach(function(it,i){
     var prev=el('span',{class:'prev','aria-hidden':'true'});
     function paintPrev(){prev.innerHTML=ICONS[it.icon];prev.style.background=(THEME[it.icon]||THEME.general)[0];}
@@ -460,7 +472,7 @@ function renderEditor(){
   updateTimes();
 }
 $('addRow').addEventListener('click',function(){
-  S.week[editDay].push({name:'حصة جديدة',type:'lesson',icon:'general',dur:40});
+  eItems().push({name:'حصة جديدة',type:'lesson',icon:'general',dur:40});
   renderEditor();refresh();
 });
 function armed(btn,label,action){
@@ -477,9 +489,31 @@ armed($('copyDay'),'نسخ هذا اليوم لباقي الأيام',function()
 });
 $('startTime').addEventListener('input',function(){
   var v=this.value.split(':');
-  if(v.length===2&&v[0]!==''){S.start=parseInt(v[0],10)*60+parseInt(v[1],10);refresh();}
+  if(v.length===2&&v[0]!==''){var m=Math.max(0,Math.min(1439,parseInt(v[0],10)*60+(parseInt(v[1],10)||0)));if(evMode&&ovOn())S.ov.start=m;else S.start=m;refresh();applyTeacher();}
 });
 $('clsInput').addEventListener('input',function(){S.className=this.value;save();applyClass();});
+$('tchInput').addEventListener('input',function(){S.teacher=this.value.slice(0,40);save();applyTeacher();});
+function applyEv(){
+  var on=evMode&&ovOn(),wk=!todayKey();
+  dlg.classList.toggle('ev-on',on);
+  $('evStart').hidden=on;$('evEnd').hidden=!on;$('evEarlier').hidden=!on;$('evLater').hidden=!on;
+  $('evStart').disabled=wk;
+  $('copyDay').hidden=on;
+  $('schedTitle').textContent=on?'جدول اليوم — فعالية (لهذا اليوم فقط)':'جدول اليوم';
+  $('evHelp').textContent=wk?'اليوم عطلة — وضع الفعالية متاح في أيام الدوام فقط.':
+    (on?'وضع الفعالية مفعّل لليوم فقط. عدّلي وقت البداية والمدد والحصص أدناه، والبرنامج الأسبوعي الأصلي لا يتغيّر. يرجع تلقائيًا غدًا.':
+        'لرحلة أو احتفال أو يوم قصير: فعّلي وضع الفعالية، عدّلي أوقات اليوم فقط، وغدًا يرجع البرنامج الأصلي تلقائيًا.');
+}
+$('evStart').addEventListener('click',function(){
+  var tk=todayKey();if(!tk)return;
+  S.ov={date:dateStr(),start:S.start,items:clone(S.week[tk])};
+  evMode=true;viewDay=tk;renderDayTabs();syncControls();renderEditor();refresh();
+});
+armed($('evEnd'),'إنهاء الفعالية والعودة للبرنامج الأصلي',function(){
+  S.ov=null;evMode=false;syncControls();renderEditor();refresh();
+});
+$('evEarlier').addEventListener('click',function(){if(ovOn()){S.ov.start=Math.max(0,S.ov.start-5);syncControls();refresh();}});
+$('evLater').addEventListener('click',function(){if(ovOn()){S.ov.start=Math.min(1439,S.ov.start+5);syncControls();refresh();}});
 function applyClass(){var c=$('clsName');c.textContent=S.className||'';c.parentNode.style.display=S.className?'':'none';}
 
 function updateOff(){
@@ -502,14 +536,14 @@ $('optDigital').addEventListener('change',function(){S.digital=this.checked;save
 
 function syncControls(){
   $('clsInput').value=S.className||'';applyClass();
-  $('startTime').value=hhmm(S.start);
+  $('startTime').value=hhmm(eStart());$('tchInput').value=S.teacher||'';applyTeacher();applyEv();
   $('optSound').checked=S.sound;$('optCheer').checked=S.cheer;$('optSpeak').checked=S.speak;$('optVol').value=Math.round((S.vol||0.7)*100);$('optDigital').checked=S.digital;
   document.body.classList.toggle('show-digital',S.digital);
   updateOff();
 }
 $('setBtn').addEventListener('click',function(){
   HOOK.guard(function(){
-    syncControls();editDay=viewDay;renderEdayTabs();renderEditor();
+    evMode=ovOn();syncControls();editDay=viewDay;renderEdayTabs();renderEditor();
     if(typeof dlg.showModal==='function')dlg.showModal();else dlg.setAttribute('open','');
   });
 });
@@ -518,7 +552,7 @@ $('dlgClose').addEventListener('click',function(){dlg.close();});
 /* ---------- demo mode ---------- */
 var slider=$('demoSlider');
 function syncDemoRange(){
-  slider.min=String(Math.max(0,S.start-30));
+  slider.min=String(Math.max(0,vStart()-30));
   slider.max=String(Math.min(1439,Math.ceil(endT)+10));
   if(demo!==null){
     demo=Math.max(+slider.min,Math.min(+slider.max,demo));
@@ -536,7 +570,7 @@ function setDemoUI(){
 }
 function stopPlay(){demoPlaying=false;clearInterval(demoTimer);demoTimer=null;}
 function demoOff(){stopPlay();demo=null;setDemoUI();stateKey='';tick();fitName();}
-function demoOn(){demo=S.start+5;syncDemoRange();setDemoUI();stateKey='';tick();}
+function demoOn(){demo=vStart()+5;syncDemoRange();setDemoUI();stateKey='';tick();}
 $('demoBtn').addEventListener('click',function(){if(demo!==null)demoOff();else demoOn();});
 $('demoExit').addEventListener('click',demoOff);
 slider.addEventListener('input',function(){demo=+slider.value;$('demoTime').textContent=hhmm(demo);tick();});
@@ -573,12 +607,20 @@ document.querySelectorAll('[data-ver]').forEach(function(e){e.textContent=VERSIO
 function refreshNoSave(){build();stateKey='';tick();syncDemoRange();updateTimes();}
 window.__clock={
   hook:HOOK,
-  getData:function(){return{name:S.className,start:S.start,week:clone(S.week)};},
+  getData:function(){return{name:S.className,start:S.start,week:clone(S.week),teacher:S.teacher||'',override:ovOn()?clone(S.ov):null};},
   version:VERSION,
   setData:function(d){
     if(typeof d.name==='string')S.className=d.name;
     if(typeof d.start==='number')S.start=Math.max(0,Math.min(1439,d.start));
     DAY_KEYS.forEach(function(k){S.week[k]=validateItems(d.week&&d.week[k])||[];});
+    S.teacher=typeof d.teacher==='string'?d.teacher.slice(0,40):'';
+    S.ov=null;
+    var o=d.override;
+    if(o&&typeof o==='object'&&/^\d{4}-\d{2}-\d{2}$/.test(String(o.date))&&typeof o.start==='number'){
+      var oi=validateItems(o.items);
+      if(oi)S.ov={date:o.date,start:Math.max(0,Math.min(1439,Math.round(o.start))),items:oi};
+    }
+    evMode=ovOn();applyTeacher();
     stopPlay();demo=null;setDemoUI();
     viewDay=todayKey()||'sun';editDay=viewDay;
     renderDayTabs();applyClass();refreshNoSave();
@@ -589,8 +631,10 @@ window.__clock={
   theme:function(k){return THEME[k]||THEME.general;},
   statusOf:function(d){
     var dk=todayKey();if(!dk)return{state:'weekend'};
-    var t=nowMin(),cur=d.start,arr=(d.week&&d.week[dk])||[],i;
-    if(t<d.start)return{state:'before',at:hhmm(d.start)};
+    var st0=d.start,arr=(d.week&&d.week[dk])||[],i,ov=d.override;
+    if(ov&&ov.date===dateStr()&&Array.isArray(ov.items)&&typeof ov.start==='number'){st0=ov.start;arr=ov.items;}
+    var t=nowMin(),cur=st0;
+    if(t<st0)return{state:'before',at:hhmm(st0)};
     for(i=0;i<arr.length;i++){
       var e=cur+arr[i].dur;
       if(t>=cur&&t<e){
