@@ -449,11 +449,18 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
       <h3>فعالية أو يوم خاص (لليوم فقط)</h3>
       <p class="help" id="evHelp"></p>
       <div class="ctl">
-        <button class="mini" id="evStart" type="button">⚡ تفعيل وضع الفعالية لليوم</button>
-        <button class="mini" id="evEarlier" type="button" hidden>تقديم كل اليوم 5 د</button>
-        <button class="mini" id="evLater" type="button" hidden>تأخير كل اليوم 5 د</button>
+        <label class="lbl">اسم الفعالية <input type="text" id="evName" maxlength="30" value="فعالية" placeholder="مثال: رحلة"></label>
+      </div>
+      <div class="ctl">
+        <label class="lbl">من الساعة <input type="time" id="evFrom"></label>
+        <label class="lbl">إلى الساعة <input type="time" id="evTo"></label>
+        <label class="lbl"><input type="checkbox" id="evAll"> كل اليوم</label>
+      </div>
+      <div class="ctl">
+        <button class="mini" id="evApply" type="button">⚡ تفعيل الفعالية</button>
         <button class="mini danger" id="evEnd" type="button" hidden>إنهاء الفعالية والعودة للبرنامج الأصلي</button>
       </div>
+      <p class="help" id="evMsg" role="status"></p>
     </div>
 
     <div class="sec">

@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var $=function(id){return document.getElementById(id);};
-var VERSION='v1.04';
+var VERSION='v1.05';
 var KEY='classclock:prefs1';
 try{localStorage.removeItem('classclock:v4');localStorage.removeItem('classclock:v3');}catch(e){}
 var DAY_KEYS=['sun','mon','tue','wed','thu'];
@@ -72,7 +72,7 @@ function validateItems(arr){
   if(!Array.isArray(arr)||!arr.length)return null;
   return arr.slice(0,30).map(function(it){
     var ic=LABELS[it.icon]?it.icon:(EMOJI[it.icon]||iconFor(it.name)||'general');
-    return{name:String(it.name||'حصة').replace(/رياضيات/g,'حساب').slice(0,60),type:TYPES[it.type]?it.type:'lesson',icon:ic,dur:Math.max(1,Math.min(180,parseInt(it.dur,10)||40))};
+    return{name:String(it.name||'حصة').replace(/رياضيات/g,'حساب').slice(0,60),type:TYPES[it.type]?it.type:'lesson',icon:ic,dur:Math.max(1,Math.min(600,parseInt(it.dur,10)||40))};
   });
 }
 function load(){
@@ -493,27 +493,55 @@ $('startTime').addEventListener('input',function(){
 });
 $('clsInput').addEventListener('input',function(){S.className=this.value;save();applyClass();});
 $('tchInput').addEventListener('input',function(){S.teacher=this.value.slice(0,40);save();applyTeacher();});
+function parseHM(v){var p=String(v||'').split(':');if(p.length!==2||p[0]==='')return null;var m=parseInt(p[0],10)*60+(parseInt(p[1],10)||0);return isNaN(m)?null:m;}
+function dayBounds(){var tk=todayKey();if(!tk)return null;var sum=S.week[tk].reduce(function(a,i){return a+i.dur;},0);return{st:S.start,end:S.start+sum};}
+/* فعالية من x إلى y: تُدرج كنافذة في اليوم، والحصص قبلها وبعدها تبقى بأوقاتها الأصلية (لا يتم تقديم أو تأخير شيء) */
+function makeEvent(x,y,name){
+  var tk=todayKey(),b=dayBounds();if(!tk||!b)return null;
+  x=Math.max(x,b.st);y=Math.min(y,b.end);if(y<=x)return null;
+  var ev={name:(name||'فعالية').slice(0,30),type:'activity',icon:'general',dur:y-x},out=[],placed=false,t=b.st;
+  S.week[tk].forEach(function(it){
+    var a=t,e=t+it.dur;t=e;
+    if(e<=x){out.push(clone(it));return;}
+    if(a>=y){if(!placed){out.push(ev);placed=true;}out.push(clone(it));return;}
+    if(a<x){var l=clone(it);l.dur=x-a;out.push(l);}
+    if(!placed){out.push(ev);placed=true;}
+    if(e>y){var r=clone(it);r.dur=e-y;out.push(r);}
+  });
+  if(!placed)out.push(ev);
+  return{date:dateStr(),start:b.st,items:out};
+}
+function evMsg(t){$('evMsg').textContent=t||'';}
 function applyEv(){
-  var on=evMode&&ovOn(),wk=!todayKey();
+  var on=evMode&&ovOn(),wk=!todayKey(),all=$('evAll').checked;
   dlg.classList.toggle('ev-on',on);
-  $('evStart').hidden=on;$('evEnd').hidden=!on;$('evEarlier').hidden=!on;$('evLater').hidden=!on;
-  $('evStart').disabled=wk;
+  $('evEnd').hidden=!on;
+  ['evName','evFrom','evTo','evAll','evApply'].forEach(function(id){$(id).disabled=wk;});
+  $('evFrom').disabled=wk||all;$('evTo').disabled=wk||all;
+  $('evApply').textContent=on?'⚡ تحديث الفعالية':'⚡ تفعيل الفعالية';
   $('copyDay').hidden=on;
   $('schedTitle').textContent=on?'جدول اليوم — فعالية (لهذا اليوم فقط)':'جدول اليوم';
-  $('evHelp').textContent=wk?'اليوم عطلة — وضع الفعالية متاح في أيام الدوام فقط.':
-    (on?'وضع الفعالية مفعّل لليوم فقط. عدّلي وقت البداية والمدد والحصص أدناه، والبرنامج الأسبوعي الأصلي لا يتغيّر. يرجع تلقائيًا غدًا.':
-        'لرحلة أو احتفال أو يوم قصير: فعّلي وضع الفعالية، عدّلي أوقات اليوم فقط، وغدًا يرجع البرنامج الأصلي تلقائيًا.');
+  var b=dayBounds();
+  if(b&&!$('evFrom').value){$('evFrom').value=hhmm(b.st);$('evTo').value=hhmm(Math.min(b.end,b.st+60));}
+  $('evHelp').textContent=wk?'اليوم عطلة — الفعالية متاحة في أيام الدوام فقط.':
+    (on?'الفعالية مفعّلة لليوم فقط. الحصص قبلها وبعدها بأوقاتها الأصلية، وغدًا يرجع البرنامج الأصلي تلقائيًا. يمكنك تعديل الجدول أدناه يدويًا.':
+        'حدّدي الفعالية من الساعة إلى الساعة، أو لكل اليوم. الحصص التي تقع داخل الفترة تُستبدل بالفعالية، والباقي يبقى بوقته بدون تقديم أو تأخير.');
 }
-$('evStart').addEventListener('click',function(){
-  var tk=todayKey();if(!tk)return;
-  S.ov={date:dateStr(),start:S.start,items:clone(S.week[tk])};
-  evMode=true;viewDay=tk;renderDayTabs();syncControls();renderEditor();refresh();
+$('evAll').addEventListener('change',function(){var b=dayBounds();if(this.checked&&b){$('evFrom').value=hhmm(b.st);$('evTo').value=hhmm(b.end);}applyEv();});
+$('evApply').addEventListener('click',function(){
+  var tk=todayKey(),b=dayBounds();if(!tk||!b)return;
+  var x,y;
+  if($('evAll').checked){x=b.st;y=b.end;}
+  else{x=parseHM($('evFrom').value);y=parseHM($('evTo').value);
+    if(x===null||y===null||y<=x){evMsg('اختاري وقتين صحيحين: وقت النهاية لازم يكون بعد البداية.');return;}}
+  var ov=makeEvent(x,y,$('evName').value.trim());
+  if(!ov){evMsg('الوقت خارج ساعات الدوام ('+hhmm(b.st)+' – '+hhmm(b.end)+').');return;}
+  S.ov=ov;evMode=true;viewDay=tk;renderDayTabs();syncControls();renderEditor();refresh();
+  evMsg('تم تفعيل الفعالية من '+hhmm(Math.max(x,b.st))+' إلى '+hhmm(Math.min(y,b.end))+' لليوم فقط.');
 });
 armed($('evEnd'),'إنهاء الفعالية والعودة للبرنامج الأصلي',function(){
-  S.ov=null;evMode=false;syncControls();renderEditor();refresh();
+  S.ov=null;evMode=false;syncControls();renderEditor();refresh();evMsg('');
 });
-$('evEarlier').addEventListener('click',function(){if(ovOn()){S.ov.start=Math.max(0,S.ov.start-5);syncControls();refresh();}});
-$('evLater').addEventListener('click',function(){if(ovOn()){S.ov.start=Math.min(1439,S.ov.start+5);syncControls();refresh();}});
 function applyClass(){var c=$('clsName');c.textContent=S.className||'';c.parentNode.style.display=S.className?'':'none';}
 
 function updateOff(){
